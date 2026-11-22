@@ -8,7 +8,7 @@
 whether someone is viewing the PC through the KVM and switches display layouts:
 KVM-only while watched, local 4K 165 Hz + HDR after the last viewer leaves.
 
-Current version: **v1.2.1**. English is the default UI language (`en_US`); Chinese
+Current version: **v1.2.2**. English is the default UI language (`en_US`); Chinese
 is selectable. The GUI is a configuration/status client over a named pipe; display
 work is done by a Session-1 SYSTEM agent. No packaged executable is required — users
 run `RunGUI.bat` from the project folder after setup.
@@ -42,8 +42,9 @@ RM10 (HTTPS polling)  <-->  GLKVMGuard service (Session 0, LocalSystem)
   single I/O thread plus `PeekNamedPipe`-based non-blocking reads; commands and
   broadcasts are queued and written by that same thread.
 - **GUI** (`app/ui/main_window.py`, `app/service_client.py`): start/stop, capture,
-  snapshot restore, display table, settings, tray. In service mode it does not start a
-  local `PollWorker` or local display actions.
+  snapshot restore, display table, settings, tray. Settings also provides elevated
+  service start/stop/uninstall through `app/service_worker.py`; uninstall preserves
+  user data and leaves the GUI in standalone mode.
 - **Standalone mode**: if the service is not installed (`service.json` absent), the
   GUI can use `PollWorker`/`DisplayWorker` in-process. `GLKVM_STANDALONE=1` forces
   this mode for tests.
@@ -95,6 +96,7 @@ app/
   display_worker.py       standalone display worker
   service_paths.py        ProgramData/service.json, machine password
   pipe.py                 named-pipe server/client
+  service_worker.py       elevated GUI start/stop/uninstall helper
   session_launcher.py     winlogon token → Session-1 process
   service_runtime.py      polling, state machine, pipe/agent supervisor
   agent_runtime.py        windowless CCD thread, input-desktop binding

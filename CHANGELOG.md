@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.2.2 — 2026-11-23
+
+### Added
+
+- Settings now has **Start service**, **Stop service**, and **Uninstall service**
+  buttons. They request Administrator approval through UAC, disable during the
+  operation, and report failures in the panel.
+- Starting the service reconnects the GUI automatically; stopping it drops the pipe
+  and leaves the service installed; uninstalling preserves user config/logs/snapshots
+  and switches the GUI to standalone mode.
+- Stop and uninstall ask for confirmation; uninstall points the user back to
+  `install_service.ps1` for reinstallation.
+
 ## v1.2.1 — 2026-11-22
 
 ### Fixed

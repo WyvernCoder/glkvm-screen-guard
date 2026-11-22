@@ -57,6 +57,7 @@ from ..poller import PollWorker, TestWorker
 from ..paths import APP_DIR, DATA_DIR, LOGS_DIR, VERSION_FILE, read_version
 from ..service_client import ServiceClient
 from ..service_paths import SERVICE_JSON
+from ..service_worker import ServiceWorker
 from ..theme import ThemeManager
 
 log = logging.getLogger("glkvm.ui")
@@ -133,6 +134,8 @@ class MainWindow(QMainWindow):
         self._service_connected = False
         self._service_agent_connected = False
         self._last_service_action: dict = {}
+        self._service_busy = False
+        self._service_worker: ServiceWorker | None = None
 
         self.tray: QSystemTrayIcon | None = None
         self.tray_menu: QMenu | None = None
@@ -515,6 +518,33 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(10)
 
+        service_group = self._group("#GROUP_SERVICE")
+        sv = QVBoxLayout(service_group)
+        self.settings_service_value = QLabel("—")
+        self.settings_service_value.setWordWrap(True)
+        self.settings_service_value.setStyleSheet("color: #8a94a6;")
+        sv.addWidget(self.settings_service_value)
+        service_buttons = QHBoxLayout()
+        self.service_start_btn = QPushButton()
+        self._bind(self.service_start_btn, "#BTN_SERVICE_START")
+        self.service_stop_btn = QPushButton()
+        self._bind(self.service_stop_btn, "#BTN_SERVICE_STOP")
+        self.service_uninstall_btn = QPushButton()
+        self._bind(self.service_uninstall_btn, "#BTN_SERVICE_UNINSTALL")
+        service_buttons.addWidget(self.service_start_btn)
+        service_buttons.addWidget(self.service_stop_btn)
+        service_buttons.addWidget(self.service_uninstall_btn)
+        service_buttons.addStretch(1)
+        sv.addLayout(service_buttons)
+        self.service_action_status = QLabel()
+        self.service_action_status.setWordWrap(True)
+        self.service_action_status.setStyleSheet("color: #8a94a6;")
+        sv.addWidget(self.service_action_status)
+        self.note_service_control = QLabel()
+        self.note_service_control.setWordWrap(True)
+        self._bind(self.note_service_control, "#NOTE_SERVICE_CONTROL")
+        sv.addWidget(self.note_service_control)
+
         appearance = self._group("#GROUP_APPEARANCE")
         aform = QFormLayout(appearance)
         aform.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
@@ -568,6 +598,7 @@ class MainWindow(QMainWindow):
         self._bind(self.about_label, "#ABOUT")
         av.addWidget(self.about_label)
 
+        layout.addWidget(service_group)
         layout.addWidget(appearance)
         layout.addWidget(tray_group)
         layout.addWidget(data_group)
@@ -689,6 +720,9 @@ class MainWindow(QMainWindow):
         self.apply_btn.clicked.connect(self._on_capture)
         self.restore_btn.clicked.connect(self._on_manual_restore)
         self.auto_apply_check.toggled.connect(self._on_auto_apply_changed)
+        self.service_start_btn.clicked.connect(self._on_service_start)
+        self.service_stop_btn.clicked.connect(self._on_service_stop)
+        self.service_uninstall_btn.clicked.connect(self._on_service_uninstall)
 
     # ============================================================ config
     def _load_config(self) -> None:
@@ -1228,6 +1262,10 @@ class MainWindow(QMainWindow):
             color = "#d9534f"
         self.service_value.setText(text)
         self.service_value.setStyleSheet(f"color: {color};")
+        settings_label = getattr(self, "settings_service_value", None)
+        if settings_label is not None:
+            settings_label.setText(text)
+            settings_label.setStyleSheet(f"color: {color};")
 
     def _on_service_connected(self, ok: bool) -> None:
         self._service_mode = self._service_configured
@@ -1242,6 +1280,7 @@ class MainWindow(QMainWindow):
                 self.service_client.call("get_state")
                 self.service_client.call("query_displays")
             log_action(self.logger, "service_connected")
+            self._update_ui_state()
         else:
             self._poll_running = False
             self._service_agent_connected = False
@@ -1345,6 +1384,135 @@ class MainWindow(QMainWindow):
             return
         if cmd in ("ping", "reload_config", "sync_password"):
             return
+
+    # ------------------------------------------------------- service control
+    def _set_service_action_status(self, text: str, color: str = "#8a94a6") -> None:
+        self.service_action_status.setText(text)
+        self.service_action_status.setStyleSheet(f"color: {color};")
+
+    def _update_service_buttons(self) -> None:
+        if not hasattr(self, "service_start_btn"):
+            return
+        installed = bool(self._service_configured)
+        running = bool(self._service_connected)
+        busy = bool(self._service_busy)
+        self.service_start_btn.setEnabled(installed and not running and not busy)
+        self.service_stop_btn.setEnabled(installed and running and not busy)
+        self.service_uninstall_btn.setEnabled(installed and not busy)
+
+    def _on_service_start(self) -> None:
+        if not self._service_configured:
+            self._warn(self.i18n.tr("#ERR_SERVICE_NOT_INSTALLED"))
+            return
+        if self._service_busy:
+            return
+        self._run_service_action("start")
+
+    def _on_service_stop(self) -> None:
+        if not self._service_configured or self._service_busy:
+            return
+        if not self._confirm(
+            self.i18n.tr("#CONFIRM_STOP_SERVICE_TITLE"),
+            self.i18n.tr("#CONFIRM_STOP_SERVICE_TEXT"),
+        ):
+            return
+        self._run_service_action("stop")
+
+    def _on_service_uninstall(self) -> None:
+        if not self._service_configured or self._service_busy:
+            return
+        if not self._confirm(
+            self.i18n.tr("#CONFIRM_UNINSTALL_SERVICE_TITLE"),
+            self.i18n.tr("#CONFIRM_UNINSTALL_SERVICE_TEXT"),
+        ):
+            return
+        self._run_service_action("uninstall")
+
+    def _run_service_action(self, action: str) -> None:
+        if self._service_busy:
+            return
+        self._service_busy = True
+        self._set_service_action_status(
+            self.i18n.tr("#STATUS_SERVICE_ACTION_RUNNING"), "#2f7ff0"
+        )
+        self._update_service_buttons()
+        worker = ServiceWorker(action, APP_DIR, self)
+        worker.done.connect(self._on_service_action_done)
+        worker.finished.connect(worker.deleteLater)
+        self._service_worker = worker
+        log_action(self.logger, "service_control", action=action)
+        worker.start()
+
+    def _on_service_action_done(self, action: str, ok: bool, message: str) -> None:
+        self._service_busy = False
+        self._service_worker = None
+        detail = (message or "").strip()[-300:]
+        if not ok:
+            reason = detail or self.i18n.tr("#ERR_SERVICE_ACTION_UNKNOWN")
+            self._set_service_action_status(
+                self.i18n.tr("#STATUS_SERVICE_ACTION_FAILED").format(error=reason),
+                "#d9534f",
+            )
+            self.logger.warning("Service action %s failed: %s", action, detail)
+            self._update_service_buttons()
+            self._update_ui_state()
+            return
+
+        if action == "start":
+            self._service_configured = SERVICE_JSON.exists()
+            self._service_mode = self._service_configured
+            self._service_connected = False
+            self._service_agent_connected = False
+            self._poll_running = False
+            self._set_service_action_status(
+                self.i18n.tr("#STATUS_SERVICE_STARTED"), "#2fbf71"
+            )
+            self._set_conn_status("#STATE_STARTING", "#2f7ff0")
+            self._restart_service_client()
+        elif action == "stop":
+            self._service_configured = SERVICE_JSON.exists()
+            self._service_connected = False
+            self._service_agent_connected = False
+            self._poll_running = False
+            self._drop_service_client()
+            self._set_conn_status("#STATE_STOPPED", "#8a94a6")
+            self._set_service_action_status(
+                self.i18n.tr("#STATUS_SERVICE_STOPPED"), "#8a94a6"
+            )
+        elif action == "uninstall":
+            self._service_configured = False
+            self._service_mode = False
+            self._service_connected = False
+            self._service_agent_connected = False
+            self._poll_running = False
+            self._drop_service_client()
+            self._set_conn_status("#SERVICE_VALUE_STANDALONE", "#8a94a6")
+            self._set_service_action_status(
+                self.i18n.tr("#STATUS_SERVICE_UNINSTALLED"), "#2fbf71"
+            )
+            self._warn(self.i18n.tr("#SERVICE_UNINSTALLED_TEXT"))
+
+        self._update_service_label()
+        self._update_ui_state()
+        log_action(self.logger, "service_control_done", action=action, ok=ok)
+
+    def _restart_service_client(self) -> None:
+        self._drop_service_client()
+        if not self._service_configured:
+            return
+        client = ServiceClient()
+        client.connected.connect(self._on_service_connected)
+        client.state.connect(self._on_service_state)
+        client.response.connect(self._on_service_response)
+        client.error.connect(lambda message: self.logger.warning("Service client: %s", message))
+        self.service_client = client
+        client.start()
+
+    def _drop_service_client(self) -> None:
+        client = self.service_client
+        self.service_client = None
+        if client is not None:
+            client.stop()
 
     # ============================================================ displays
     def _slot_map(self, top: ccd.Topology) -> dict[str, int]:
@@ -1947,6 +2115,7 @@ class MainWindow(QMainWindow):
         self._update_cert_label()
         self._update_reason()
         self._update_service_label()
+        self._update_service_buttons()
         self._update_about_text()
 
     def _update_pause_actions(self) -> None:
@@ -2218,6 +2387,8 @@ class MainWindow(QMainWindow):
 
         self._quitting = True
         self._disconnect_timer.stop()
+        if self._service_worker is not None:
+            self._service_worker.wait(3000)
         if self.service_client is not None:
             self.service_client.stop()
         if self._poll_worker is not None:
@@ -2327,6 +2498,9 @@ class MainWindow(QMainWindow):
             (self.screen_combo, "#TIP_SCREEN"),
             (self.hdr_check, "#TIP_HDR"),
             (self.snapshot_label, "#TIP_SNAPSHOT"),
+            (self.service_start_btn, "#TIP_SERVICE_START"),
+            (self.service_stop_btn, "#TIP_SERVICE_STOP"),
+            (self.service_uninstall_btn, "#TIP_SERVICE_UNINSTALL"),
             (self.on_connect_radios["kvm-only"], "#TIP_ON_CONNECT_KVM_ONLY"),
             (self.on_connect_radios["clone"], "#TIP_ON_CONNECT_CLONE"),
             (self.on_connect_radios["extend"], "#TIP_ON_CONNECT_EXTEND"),

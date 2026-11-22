@@ -1,4 +1,4 @@
-# 安装与使用（GLKVM Screen Guard v1.2.1）
+# 安装与使用（GLKVM Screen Guard v1.2.2）
 
 面向 **Windows 11 + GL.iNet GLKVM RM10** 的屏幕守卫。用户不需要安装包：按下面步骤准备好 Python 环境、快捷方式和 Windows 服务后，直接运行 `RunGUI.bat`（或桌面快捷方式）即可。
 
@@ -69,6 +69,7 @@ powershell -ExecutionPolicy Bypass -File .\install_service.ps1
 - 从用户 `config.ini` 同步机器级 DPAPI 密码。
 - 重跑可用于修复/升级；卸载用 `uninstall_service.ps1`。
 - 服务是后台检测、登录前运行和关屏恢复的关键；不安装服务时 GUI 只能使用受限的独立模式。
+- GUI 的 **Settings → Windows service** 也提供启动/停止/卸载按钮，会请求管理员权限；卸载保留用户配置/日志/快照。
 
 校验：
 
