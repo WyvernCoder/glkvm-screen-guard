@@ -316,6 +316,14 @@ class DisplayManager:
     def _restore_hdr(self, snapshot: dict) -> None:
         if not self.hdr_restore:
             return
+        # A snapshot captured before the Windows 11 24H2 HDR API split may
+        # contain advanced-color state (WCG) mislabelled as HDR.  Do not turn
+        # HDR on from it; require a fresh capture with the modern API.
+        if ccd.HDR_API_V2 and snapshot.get("hdr_api") != "v2":
+            self.log.warning(
+                "Skipping HDR restore: snapshot HDR state predates the Windows 11 24H2 API; recapture first"
+            )
+            return
         for item in snapshot.get("displays", []):
             if item.get("hdr_supported"):
                 rc = ccd.set_hdr_by_key(item["key"], True)

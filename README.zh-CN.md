@@ -4,7 +4,7 @@
 
 面向 **Windows 11 + GL.iNet GLKVM RM10** 的桌面工具：根据“是否有人通过 GLKVM 观看画面”自动切换显示布局，并在无人观看时恢复本地的 4K 165 Hz + HDR。
 
-当前版本 **v1.2.0**。轮询和切换状态机运行在 LocalSystem Windows 服务中；显示变更只由 Session 1 的 SYSTEM 显示代理执行。GUI 通过命名管道配置和查看状态，不需要常驻。**界面默认英文**，可在设置中切换中文。
+当前版本 **v1.2.1**。轮询和切换状态机运行在 LocalSystem Windows 服务中；显示变更只由 Session 1 的 SYSTEM 显示代理执行。GUI 通过命名管道配置和查看状态，不需要常驻。**界面默认英文**，可在设置中切换中文。
 
 ## 功能
 
@@ -104,6 +104,8 @@ powershell -ExecutionPolicy Bypass -File .\install_service.ps1
 ## 当前限制
 
 - 无用户登录界面、锁屏/睡眠/关机的端到端实机测试仍待完成；服务已接入 SESSIONCHANGE/POWEREVENT/PRESHUTDOWN 处理。
+- HDR 状态在 Windows 11 24H2+（build 26100+）通过拆分后的 HDR/WCG API 精确读取；旧版 Windows 回退到 legacy advanced-color API，无法区分 HDR 与 WCG。
+- 从 v1.2.0 或更早版本升级后，请重启服务并重新采集一次本地快照；旧快照没有 `hdr_api`，不会用来打开 HDR。
 - GUI 仍用只读 `QueryDisplayConfig` 填显示器表；切换/采集/恢复都走服务代理。
 - 不支持设备屏两步认证。
 - 不提供单独安装包；按上面的设置步骤运行 `RunGUI.bat`。

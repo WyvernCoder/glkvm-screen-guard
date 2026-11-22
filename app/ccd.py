@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import ctypes
 import json
+import logging
 import os
 import re
 import subprocess
+import sys
 import time
 from ctypes import wintypes
 from dataclasses import dataclass, field
@@ -46,6 +48,20 @@ DEVICE_INFO_GET_TARGET_NAME = 2
 DEVICE_INFO_GET_ADAPTER_NAME = 4
 DEVICE_INFO_GET_ADVANCED_COLOR_INFO = 9
 DEVICE_INFO_SET_ADVANCED_COLOR_STATE = 10
+DEVICE_INFO_GET_ADVANCED_COLOR_INFO_2 = 15
+DEVICE_INFO_SET_HDR_STATE = 16
+
+# Windows 11 24H2 split advanced color into HDR and WCG.  The legacy API
+# (types 9/10) cannot distinguish them; on 26100+ use the new HDR API.
+HDR_API_BUILD = 26100
+try:
+    WINDOWS_BUILD = int(sys.getwindowsversion().build)
+except Exception:
+    WINDOWS_BUILD = 0
+HDR_API_V2 = WINDOWS_BUILD >= HDR_API_BUILD
+
+log = logging.getLogger("glkvm.ccd")
+_V2_WARNING_SHOWN = False
 
 # DISPLAYCONFIG_OUTPUT_TECHNOLOGY_*
 TECH_NAMES = {
@@ -210,6 +226,20 @@ class SET_COLOR(ctypes.Structure):
     _fields_ = [("header", DEVICE_INFO_HEADER), ("value", wintypes.UINT)]
 
 
+class COLOR_INFO_2(ctypes.Structure):
+    _fields_ = [
+        ("header", DEVICE_INFO_HEADER),
+        ("value", wintypes.UINT),
+        ("colorEncoding", wintypes.UINT),
+        ("bitsPerColorChannel", wintypes.UINT),
+        ("activeColorMode", wintypes.UINT),
+    ]
+
+
+class SET_HDR_STATE(ctypes.Structure):
+    _fields_ = [("header", DEVICE_INFO_HEADER), ("value", wintypes.UINT)]
+
+
 # ---------------------------------------------------------------- signatures
 user32.GetDisplayConfigBufferSizes.argtypes = [
     wintypes.UINT,
@@ -252,7 +282,9 @@ def struct_sizes() -> dict[str, int]:
         "sourceName": ctypes.sizeof(SOURCE_NAME),
         "adapterName": ctypes.sizeof(ADAPTER_NAME),
         "colorInfo": ctypes.sizeof(COLOR_INFO),
+        "colorInfo2": ctypes.sizeof(COLOR_INFO_2),
         "setColor": ctypes.sizeof(SET_COLOR),
+        "setHdrState": ctypes.sizeof(SET_HDR_STATE),
     }
 
 
@@ -333,7 +365,33 @@ def _target_name(path: PATH_INFO) -> TARGET_NAME | None:
     return packet
 
 
-def _color_info(path: PATH_INFO) -> dict:
+def decode_color_info_v2(value: int, active_mode: int, bits: int = 0) -> dict:
+    """Decode DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2.
+
+    Windows 11 24H2+ separates HDR from WCG.  Bit 1 is *advanced color active*
+    and is also set for WCG-only targets, so it must not be used as HDR state.
+    """
+    value = int(value)
+    active_mode = int(active_mode)
+    hdr_supported = bool(value & (1 << 4))
+    wcg_user_enabled = bool(value & (1 << 7))
+    return {
+        "rc": 0,
+        "api": "v2",
+        "supported": hdr_supported,
+        "enabled": hdr_supported and active_mode == 2,
+        "wide": wcg_user_enabled,
+        "forceDisabled": False,
+        "bits": int(bits),
+        "raw": value,
+        "hdr_user_enabled": bool(value & (1 << 5)),
+        "wcg_supported": bool(value & (1 << 6)),
+        "wcg_user_enabled": wcg_user_enabled,
+        "active_color_mode": active_mode,
+    }
+
+
+def _color_info_legacy(path: PATH_INFO) -> dict:
     packet = COLOR_INFO()
     packet.header.type = DEVICE_INFO_GET_ADVANCED_COLOR_INFO
     packet.header.size = ctypes.sizeof(COLOR_INFO)
@@ -342,13 +400,44 @@ def _color_info(path: PATH_INFO) -> dict:
     rc = _get_device_info(packet)
     return {
         "rc": rc,
+        "api": "v1",
         "supported": bool(packet.value & 1),
         "enabled": bool(packet.value & 2),
         "wide": bool(packet.value & 4),
         "forceDisabled": bool(packet.value & 8),
         "bits": int(packet.bitsPerColorChannel),
         "raw": int(packet.value),
+        "hdr_user_enabled": False,
+        "wcg_supported": False,
+        "wcg_user_enabled": False,
+        "active_color_mode": -1,
     }
+
+
+def _color_info(path: PATH_INFO) -> dict:
+    global _V2_WARNING_SHOWN
+    if HDR_API_V2:
+        packet = COLOR_INFO_2()
+        packet.header.type = DEVICE_INFO_GET_ADVANCED_COLOR_INFO_2
+        packet.header.size = ctypes.sizeof(COLOR_INFO_2)
+        packet.header.adapterId = path.target.adapterId
+        packet.header.id = path.target.id
+        rc = _get_device_info(packet)
+        if rc == 0:
+            return decode_color_info_v2(
+                int(packet.value),
+                int(packet.activeColorMode),
+                int(packet.bitsPerColorChannel),
+            )
+        if rc == 31:
+            log.debug("HDR API v2 unavailable for an inactive/unsupported target (rc=31)")
+        elif not _V2_WARNING_SHOWN:
+            log.warning(
+                "HDR API v2 query failed (rc=%s); falling back to legacy advanced-color API",
+                rc,
+            )
+            _V2_WARNING_SHOWN = True
+    return _color_info_legacy(path)
 
 
 def set_hdr(path: PATH_INFO, enabled: bool) -> int:
@@ -357,9 +446,14 @@ def set_hdr(path: PATH_INFO, enabled: bool) -> int:
         return info["rc"]
     if not info["supported"]:
         return 50  # ERROR_NOT_SUPPORTED
-    packet = SET_COLOR()
-    packet.header.type = DEVICE_INFO_SET_ADVANCED_COLOR_STATE
-    packet.header.size = ctypes.sizeof(SET_COLOR)
+    if info.get("api") == "v2":
+        packet = SET_HDR_STATE()
+        packet.header.type = DEVICE_INFO_SET_HDR_STATE
+        packet.header.size = ctypes.sizeof(SET_HDR_STATE)
+    else:
+        packet = SET_COLOR()
+        packet.header.type = DEVICE_INFO_SET_ADVANCED_COLOR_STATE
+        packet.header.size = ctypes.sizeof(SET_COLOR)
     packet.header.adapterId = path.target.adapterId
     packet.header.id = path.target.id
     packet.value = 1 if enabled else 0
@@ -627,11 +721,19 @@ def capture_snapshot(kvm_key: str = "") -> dict:
                 break
         if owner:
             mode_dicts[index]["adapter"] = owner
+    # Per-display HDR state is only trustworthy if every active display used
+    # the modern backend; otherwise mark the snapshot as legacy.
+    hdr_api = "v2" if HDR_API_V2 else "v1"
+    if HDR_API_V2 and not all(
+        _color_info(display.path).get("api") == "v2" for display in topology.active
+    ):
+        hdr_api = "v1"
     return {
         "version": 1,
         "captured_at": datetime.now().isoformat(timespec="seconds"),
         "topology": topology.mode,
         "kvm_key": kvm_key,
+        "hdr_api": hdr_api,
         "paths": path_dicts,
         "modes": mode_dicts,
         "displays": [

@@ -4,7 +4,7 @@ A Windows 11 desktop tool for **GL.iNet GLKVM RM10**. It watches whether someone
 viewing the machine through GLKVM and switches the display layout automatically,
 then restores the local 4K 165 Hz + HDR layout when the last viewer leaves.
 
-Current version: **v1.2.0**. Polling and the switch state machine run in a LocalSystem
+Current version: **v1.2.1**. Polling and the switch state machine run in a LocalSystem
 Windows service; display changes are executed by a Session-1 SYSTEM display agent.
 The GUI is a configuration/status client over a named pipe, so it does not need to
 stay open. **English is the default UI language**; Chinese is available in Settings.
@@ -144,6 +144,11 @@ closed; the GUI is only for configuration and status.
 
 - The no-user logon screen and end-to-end lock/sleep/shutdown tests are still pending;
   the service has SESSIONCHANGE/POWEREVENT/PRESHUTDOWN handlers wired.
+- HDR state is exact on Windows 11 24H2+ (build 26100+) via the split HDR/WCG API.
+  Older builds fall back to the legacy advanced-color API, which cannot distinguish
+  HDR from WCG.
+- After upgrading from v1.2.0 or earlier, restart the service and capture the local
+  snapshot once. Old snapshots lack `hdr_api` and are not used to turn HDR on.
 - The GUI still performs a read-only `QueryDisplayConfig` to fill the display table;
   switching/capture/restore all go through the service and agent.
 - Two-step authentication is not supported.

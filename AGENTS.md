@@ -8,7 +8,7 @@
 whether someone is viewing the PC through the KVM and switches display layouts:
 KVM-only while watched, local 4K 165 Hz + HDR after the last viewer leaves.
 
-Current version: **v1.2.0**. English is the default UI language (`en_US`); Chinese
+Current version: **v1.2.1**. English is the default UI language (`en_US`); Chinese
 is selectable. The GUI is a configuration/status client over a named pipe; display
 work is done by a Session-1 SYSTEM agent. No packaged executable is required — users
 run `RunGUI.bat` from the project folder after setup.
@@ -208,8 +208,13 @@ Password is stored only as DPAPI ciphertext. Never log passwords, tokens, or raw
   LUIDs (change on reboot), monitor names (EDID can change), or a bare target index.
 - **Slot numbers**: DP/eDP = 1, HDMI/DVI = 2, others = 3; target ID is the final
   tie-breaker. On the test machine the physical display is screen 1 and KVM is screen 2.
-- **HDR** is per-display: `GET_ADVANCED_COLOR_INFO` (9) and
-  `SET_ADVANCED_COLOR_STATE` (10). Duplicate mode does not support HDR.
+- **HDR** is per-display. On Windows 11 build 26100+, use
+  `DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2` (type 15) and `SET_HDR_STATE` (type 16):
+  `highDynamicRangeSupported` is bit 4, `highDynamicRangeUserEnabled` bit 5, and the
+  active state is `activeColorMode == 2` (HDR); `activeColorMode == 1` is WCG, not HDR.
+  Builds below 26100 fall back to the legacy advanced-color types 9/10, which cannot
+  separate HDR from WCG. Snapshots store `hdr_api`; HDR restore from a snapshot without
+  `hdr_api: "v2"` is skipped on modern Windows until recaptured.
 - **Real switch**: Windows external topology first, then `DisplaySwitch.exe /external`
   as fallback; verify for 10 seconds and roll back on failure.
 - **Measured**: service/agent KVM-only switch ~1085 ms, local restore ~859 ms,

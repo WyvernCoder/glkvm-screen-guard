@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.2.1 — 2026-11-22
+
+### Fixed
+
+- HDR state now uses the Windows 11 24H2+ split HDR/WCG API
+  (`DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2` and `SET_HDR_STATE`) on build 26100+.
+  The legacy `DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO` reports generic advanced color,
+  so an HDR-off/WCG-on display was incorrectly shown and captured as “HDR on”.
+  The active HDR state is now `activeColorMode == HDR`; WCG is not treated as HDR.
+- HDR restore/off uses `SET_HDR_STATE` on modern Windows. Older Windows builds keep
+  the legacy API; targets where the modern API is unavailable fall back with a warning.
+- Snapshots now record `hdr_api`. On modern Windows, HDR restore from a pre-v1.2.1
+  snapshot without `hdr_api: "v2"` is skipped until the user recaptures, preventing
+  stale WCG data from turning HDR on.
+- The recorded-snapshot label now distinguishes the captured HDR state from the
+  restore-HDR option and updates immediately when that option changes.
+
+### Upgrade
+
+- Restart the service, then capture the local display snapshot once more.
+
 ## v1.2.0 — 2026-11-22
 
 First public release.

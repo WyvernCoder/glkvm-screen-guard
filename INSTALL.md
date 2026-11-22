@@ -1,4 +1,4 @@
-# 安装与使用（GLKVM Screen Guard v1.2.0）
+# 安装与使用（GLKVM Screen Guard v1.2.1）
 
 面向 **Windows 11 + GL.iNet GLKVM RM10** 的屏幕守卫。用户不需要安装包：按下面步骤准备好 Python 环境、快捷方式和 Windows 服务后，直接运行 `RunGUI.bat`（或桌面快捷方式）即可。
 
@@ -174,6 +174,8 @@ Test-Path (Join-Path $data 'snapshots\local.json')
 ## 10. 当前限制
 
 - 无用户登录界面、锁屏/睡眠/关机的端到端实机测试仍待完成（代码路径已接入服务的 SESSIONCHANGE/POWEREVENT/PRESHUTDOWN）。
+- HDR 状态在 Windows 11 24H2+（build 26100+）是准确的；旧版 Windows 回退到 legacy advanced-color API，无法区分 HDR 与 WCG。
+- 从 v1.2.0 或更早版本升级后，请重启服务并重新采集一次本地快照；旧快照没有 `hdr_api`，不会用来打开 HDR。
 - GUI 仍会用只读 `QueryDisplayConfig` 填显示器表；切换/采集/恢复都走服务代理。
 - 不支持设备屏两步认证。
 - 不提供单独安装包；按本文步骤配置后直接运行 `RunGUI.bat`。
