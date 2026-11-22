@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GLKVM 屏幕守卫 · UI 原型</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="desktop">
+  <div class="window">
+
+    <!-- 标题栏：PyQt 中对应 QMainWindow 的顶部区域 -->
+    <header class="appbar">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="2.5" y="4" width="19" height="13" rx="2.5"/>
+          <path d="M8 21h8M12 17v4"/>
+        </svg>
+        <span class="brand-title">GLKVM 屏幕守卫</span>
+        <span class="brand-ver">原型</span>
+      </div>
+      <div class="appbar-right">
+        <span class="pill" id="statusPill">
+          <span class="dot"></span>
+          <span id="statusText">本地显示</span>
+        </span>
+      </div>
+    </header>
+
+    <!-- 标签页：对应 QTabWidget -->
+    <nav class="tabs" id="tabs" role="tablist">
+      <button class="tab is-active" data-tab="connect" role="tab">连接</button>
+      <button class="tab" data-tab="actions" role="tab">动作</button>
+      <button class="tab" data-tab="displays" role="tab">显示器</button>
+      <button class="tab" data-tab="service" role="tab">服务</button>
+    </nav>
+
+    <main class="content" id="content">
+
+      <!-- ───────────── 连接 ───────────── -->
+      <section class="panel is-active" data-panel="connect">
+        <fieldset class="group">
+          <legend>GLKVM 设备</legend>
+
+          <div class="form">
+            <label for="addr">IP 地址</label>
+            <input class="input wide" id="addr" type="text" value="192.168.1.100">
+
+            <label for="user">用户名</label>
+            <input class="input" id="user" type="text" value="admin">
+
+            <label for="pass">密码</label>
+            <div class="inline">
+              <input class="input" id="pass" type="password" value="glkvm-password">
+              <button class="btn" id="showPass" type="button">显示</button>
+            </div>
+
+            <span></span>
+            <div class="inline">
+              <button class="btn" id="testBtn" type="button">测试连接</button>
+              <span class="result" id="testResult"><span class="dot ok"></span>已连接 · kvmd 4.82 · 16 ms</span>
+            </div>
+          </div>
+
+          <p class="note">
+            由用户手填 RM10 的 IP，工具统一用 HTTPS 连接。自签名证书首次连接时记录 SHA-256 指纹；证书日期不可信，只按指纹校验。密码由 Windows DPAPI 加密后保存在服务配置里。
+            不支持设备屏两步认证，若已开启会直接报错。
+          </p>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>检测</legend>
+
+          <div class="form">
+            <label for="poll">轮询间隔</label>
+            <div class="inline">
+              <input class="input num" id="poll" type="number" min="1" max="60" value="5">
+              <span class="unit">秒</span>
+              <span class="hint">越小发现越快，越大越省资源。建议 5 秒。</span>
+            </div>
+          </div>
+
+          <div class="readout">
+            <span>当前客户端</span>
+            <b id="clientCount">0</b>
+            <span class="hint">同时读取 /api/streamer 与会话日志</span>
+          </div>
+
+          <p class="note">
+            KVM 屏幕关闭时没有 HDMI 信号，<code>/api/streamer</code> 会返回 0 个客户端，有时整段
+            <code>streamer</code> 直接是 null。所以工具还会读 <code>/api/log</code> 里的会话记录，避免把正在看的人误判成“没人”。
+            两个接口都拿不到结果时按“未知”处理，保持现状，绝不盲切。
+          </p>
+        </fieldset>
+      </section>
+
+      <!-- ───────────── 动作 ───────────── -->
+      <section class="panel" data-panel="actions">
+        <fieldset class="group">
+          <legend>检测到客户端观看时</legend>
+
+          <div class="radios">
+            <label class="radio">
+              <input type="radio" name="onConnect" value="kvm-only" checked>
+              <span><b>只显示 KVM 屏</b><em>物理屏熄灭，远端拿到 KVM 的原生分辨率</em></span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="onConnect" value="clone">
+              <span><b>复制到所有屏幕</b><em>两块屏同一画面，HDR 会关闭</em></span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="onConnect" value="extend">
+              <span><b>扩展</b><em>KVM 屏作为副屏，远端看到一块独立桌面</em></span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="onConnect" value="hold">
+              <span><b>保持当前布局</b><em>只记录日志，不做切换</em></span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>客户端离开后</legend>
+
+          <div class="radios">
+            <label class="radio">
+              <input type="radio" name="onDisconnect" value="restore" checked>
+              <span><b>恢复本地快照</b><em>回到你在桌前时的布局与刷新率</em></span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="onDisconnect" value="screen">
+              <span class="radio-line">
+                <b>只显示屏幕</b>
+                <select class="select" id="screenSel" disabled>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                </select>
+                <em>按显示编号固定，不依赖快照</em>
+              </span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="onDisconnect" value="clone">
+              <span><b>复制屏幕</b><em>两块屏同画面，HDR 关闭</em></span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="onDisconnect" value="hold">
+              <span><b>保持当前布局</b><em>留在远程布局，等你手动切回</em></span>
+            </label>
+          </div>
+
+          <div class="snapshot">
+            <div class="snap-head">
+              <span class="snap-title">本地快照</span>
+              <span class="badge ok" id="snapBadge">有效</span>
+            </div>
+            <div class="snap-value" id="snapValue">3840 × 2160 · 165 Hz · HDR10 · 仅屏幕 1</div>
+            <div class="snap-meta" id="snapMeta">27U8A Pro-S · DP-1 · 采集于今天 14:20</div>
+            <div class="snap-actions">
+              <button class="btn primary" id="captureBtn" type="button">应用当前显示器设置</button>
+              <span class="hint" id="captureHint">读取当前桌面并覆盖这份快照</span>
+            </div>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" id="hdrCheck" checked>
+            恢复后打开系统 HDR 开关（显示器支持但未开启时）
+          </label>
+        </fieldset>
+
+        <p class="note">KVM 连不上时保持现状，不会“瞎切”。切换后会在 10 秒内校验拓扑，失败自动回滚。</p>
+      </section>
+
+      <!-- ───────────── 显示器 ───────────── -->
+      <section class="panel" data-panel="displays">
+        <fieldset class="group">
+          <legend>
+            当前显示器
+            <button class="btn small" id="rescanBtn" type="button">刷新</button>
+          </legend>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>编号</th><th>名称</th><th>接口</th><th>分辨率</th><th>刷新率</th><th>HDR</th><th>角色</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td><td>27U8A Pro-S</td><td>DP-1</td><td>3840 × 2160</td><td>165 Hz</td><td>HDR10</td><td>主显示器</td>
+              </tr>
+              <tr>
+                <td>2</td><td>LGD_MP1.1_</td><td>HDMI-2</td><td>2560 × 1440</td><td>60 Hz</td><td>SDR</td><td><span class="badge blue">GLKVM</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>识别方式</legend>
+
+          <div class="inline big">
+            <span>一律将</span>
+            <select class="select" id="lockSelect">
+              <option value="none">不锁定</option>
+              <option value="1">屏幕 1</option>
+              <option value="2" selected>屏幕 2</option>
+            </select>
+            <span>锁定为 GLKVM 显示器</span>
+          </div>
+
+          <p class="note">
+            GLKVM 切换 EDID 后，显示器名称会变（这台设备出现过 ASUS、VX2478-2、GLKVM、LGD_MP1.1_）。
+            锁定后按 GPU 接口槽位识别，名称变了也找得到。
+          </p>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>EDID</legend>
+
+          <div class="readout">
+            <span>当前 EDID</span>
+            <b>LGD · 0x06B1</b>
+            <span class="hint">2560 × 1440 @ 60</span>
+            <button class="btn small" type="button">读取</button>
+          </div>
+
+          <p class="note">RM10 的自定义 EDID 上限是 2560 × 1440 @ 60。写 EDID 会让 HDMI 重新同步，Windows 可能把它当成一台新显示器。</p>
+        </fieldset>
+      </section>
+
+      <!-- ───────────── 服务 ───────────── -->
+      <section class="panel" data-panel="service">
+        <fieldset class="group">
+          <legend>后台服务</legend>
+
+          <div class="readout">
+            <span>状态</span>
+            <b><span class="dot ok" id="svcDot"></span> <span id="svcText">运行中</span></b>
+            <span class="hint">GLKVMGuardSvc · LocalSystem · 3 天 4 小时</span>
+          </div>
+
+          <div class="readout">
+            <span>会话代理</span>
+            <b><span class="dot ok"></span> 已连接</b>
+            <span class="hint">Session 1 · 显示切换由它执行</span>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn" type="button">重新安装服务</button>
+            <button class="btn" type="button">停止</button>
+            <button class="btn" type="button">卸载</button>
+          </div>
+
+          <label class="check"><input type="checkbox" checked> 开机自动启动</label>
+          <label class="check">
+            <input type="checkbox" checked>
+            登录前运行（不需要输入 PIN）
+            <span class="hint">登录界面的显示切换需实机验证</span>
+          </label>
+          <label class="check"><input type="checkbox" checked> 锁屏时继续工作</label>
+          <label class="check">
+            <input type="checkbox" checked>
+            登录后自动启动托盘
+            <span class="hint">关闭窗口不退出，守护在服务里</span>
+          </label>
+
+          <p class="note">
+            Windows 服务在登录界面之前就已经启动，所以未输入 PIN 也能工作。
+            显示切换由 Session 1 的系统会话代理执行；登录界面能否切换需要实机验证。
+            HDR 是每台显示器独立的状态；SYSTEM 在 Session 1 可以设置，登录界面是否实际生效待验证。
+            BitLocker 的预启动 PIN 阶段系统还没启动，任何软件都无能为力。
+          </p>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>运行日志</legend>
+
+          <div class="btn-row">
+            <button class="btn" type="button">打开日志目录</button>
+            <label class="check inline-check"><input type="checkbox" id="pauseCheck"> 暂停守护</label>
+          </div>
+
+          <pre class="log" id="log">14:32:11  INFO   拓扑校验通过：仅 KVM 屏 2560×1440@60
+14:32:08  INFO   应用远程布局 kvm-only，用时 2.9 s
+14:32:07  INFO   检测到客户端：stream.clients=1
+14:15:52  INFO   恢复快照 #12：3840×2160@165，HDR 已开启
+14:15:40  INFO   客户端离开：连续 2 次未检测到
+09:14:02  INFO   token 过期（403），已重新登录
+09:13:58  INFO   服务启动，会话代理已连接</pre>
+
+          <p class="note">日志只保留最近 7 天，按 5 MB 轮转。会话日志里可能出现临时令牌，不写进本地日志。</p>
+        </fieldset>
+      </section>
+
+    </main>
+
+    <!-- 状态栏：对应 QStatusBar + 底部保存按钮 -->
+    <footer class="statusbar">
+      <span class="dot ok" id="footDot"></span>
+      <span id="footSvc">服务运行中</span>
+      <span class="sep">·</span>
+      <span id="footConn">GLKVM 已连接 · 16 ms</span>
+
+      <span class="spacer"></span>
+
+      <label class="demo">
+        预览
+        <select id="demoState">
+          <option value="local">本地</option>
+          <option value="remote">远程</option>
+        </select>
+      </label>
+
+      <span class="dirty" id="dirtyText">无未保存更改</span>
+      <button class="btn small" id="cancelBtn" type="button" disabled>取消</button>
+      <button class="btn small primary" id="saveBtn" type="button" disabled>保存</button>
+    </footer>
+
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
