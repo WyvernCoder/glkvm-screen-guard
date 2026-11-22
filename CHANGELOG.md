@@ -38,6 +38,13 @@ First public release.
 - Service stop in **0.5 s**.
 - `check_i18n`, detection, read-only display, and UI smoke checks passed.
 
+### Fixed
+
+- The recorded-snapshot label now distinguishes the captured HDR state from the
+  “turn system HDR on after restore” option. It displays, for example,
+  `HDR restore: off (captured on)` and updates immediately when the option changes,
+  so turning off the restore option no longer looks like a stale HDR state.
+
 ### Known limitations
 
 - No-user logon screen and end-to-end lock/sleep/shutdown tests are still pending.

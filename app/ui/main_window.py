@@ -778,6 +778,7 @@ class MainWindow(QMainWindow):
         self.config.set_bool("actions", "hdr_restore", self.hdr_check.isChecked())
         self.config.save()
         self._sync_screen_enabled()
+        self._update_snapshot_label()
         self._service_reload_config()
         log_action(self.logger, "save_actions", on_connect=self.config.get("actions", "on_connect"))
 
@@ -1681,7 +1682,14 @@ class MainWindow(QMainWindow):
             )
             self.snapshot_label.setStyleSheet("color: #d9534f;")
         else:
-            hdr = self.i18n.tr("#HDR_ON") if info.get("hdr_enabled") else self.i18n.tr("#HDR_OFF")
+            hdr_on = bool(info.get("hdr_enabled"))
+            hdr_restore = self.config.get_bool("actions", "hdr_restore", True)
+            if hdr_on and not hdr_restore:
+                hdr = self.i18n.tr("#HDR_RESTORE_OFF_CAPTURED_ON")
+            elif not hdr_on and hdr_restore:
+                hdr = self.i18n.tr("#HDR_RESTORE_ON_CAPTURED_OFF")
+            else:
+                hdr = self.i18n.tr("#HDR_ON" if hdr_on else "#HDR_OFF")
             line = self.i18n.tr("#SNAPSHOT_LINE").format(
                 width=info.get("width", 0),
                 height=info.get("height", 0),
@@ -1694,6 +1702,8 @@ class MainWindow(QMainWindow):
             self.snapshot_label.setStyleSheet("color: #2fbf71;")
         self.snapshot_label.setToolTip(
             self.i18n.tr("#SNAPSHOT_CAPTURED").format(time=info.get("captured_at", "-"))
+            + "\n"
+            + self.i18n.tr("#TIP_SNAPSHOT")
         )
 
     def _on_capture(self) -> None:

@@ -154,8 +154,8 @@
   "#TIP_ON_DISCONNECT_CLONE": "两块屏同一画面；HDR 关闭。",
   "#TIP_ON_DISCONNECT_HOLD": "留在远程布局，等你手动切换。",
   "#TIP_SCREEN": "断开后只显示的屏幕编号。",
-  "#TIP_HDR": "只操作 Windows 的“使用 HDR”开关。",
-  "#TIP_SNAPSHOT": "当前保存的本地显示布局。",
+  "#TIP_HDR": "只影响恢复动作；不会改变已采集的快照里记录的当前 HDR 状态。",
+  "#TIP_SNAPSHOT": "采集时的实际显示状态；右侧的 HDR 选项只控制恢复动作。",
   "#TIP_CLEAR_LOG": "清空窗口里的日志显示；磁盘日志不受影响。",
   "#BTN_REFRESH": "刷新",
   "#BTN_RESTORE": "应用当前显示器快照",
@@ -218,5 +218,7 @@
   "#SERVICE_VALUE_DOWN": "服务未运行",
   "#ABOUT": "Windows 服务 + Session 1 显示代理 + 命名管道；GUI 只做配置/状态。登录/锁屏/睡眠/关机路径已接入；建议再做一次登录界面实机确认。",
   "#NOTE_ACTIONS": "总开关关闭时只检测，不切换；开启后连接/断开动作自动执行，失败回滚。",
-  "#NOTE_DISPLAYS": "显示读取与切换已启用；槽位锁按接口槽位识别，EDID 变化也能找到 KVM。"
+  "#NOTE_DISPLAYS": "显示读取与切换已启用；槽位锁按接口槽位识别，EDID 变化也能找到 KVM。",
+  "#HDR_RESTORE_OFF_CAPTURED_ON": "HDR 恢复：关（采集时开）",
+  "#HDR_RESTORE_ON_CAPTURED_OFF": "HDR 恢复：开（采集时关）"
 }

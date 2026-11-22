@@ -154,8 +154,8 @@
   "#TIP_ON_DISCONNECT_CLONE": "Same image on both screens; HDR off.",
   "#TIP_ON_DISCONNECT_HOLD": "Stay in the remote layout until you switch manually.",
   "#TIP_SCREEN": "Display number to keep after disconnect.",
-  "#TIP_HDR": "Only toggles the Windows “Use HDR” switch.",
-  "#TIP_SNAPSHOT": "The current local display snapshot.",
+  "#TIP_HDR": "Affects only the restore action; it does not change the HDR state recorded in the captured snapshot.",
+  "#TIP_SNAPSHOT": "The actual captured display state; the HDR option only controls the restore action.",
   "#TIP_CLEAR_LOG": "Clear the in-window log; the files on disk are kept.",
   "#BTN_REFRESH": "Refresh",
   "#BTN_RESTORE": "Apply current display snapshot",
@@ -218,5 +218,7 @@
   "#SERVICE_VALUE_DOWN": "Service not running",
   "#ABOUT": "Windows service + session-1 display agent + named pipe; the GUI is config/status only. Logon/lock/sleep/shutdown paths are wired; a final logon-screen check is recommended.",
   "#NOTE_ACTIONS": "When the master switch is off, only detection runs. When on, connect/disconnect actions execute automatically and roll back on failure.",
-  "#NOTE_DISPLAYS": "Display reading and switching are enabled; the slot lock follows the connector, not the EDID name."
+  "#NOTE_DISPLAYS": "Display reading and switching are enabled; the slot lock follows the connector, not the EDID name.",
+  "#HDR_RESTORE_OFF_CAPTURED_ON": "HDR restore: off (captured on)",
+  "#HDR_RESTORE_ON_CAPTURED_OFF": "HDR restore: on (captured off)"
 }
