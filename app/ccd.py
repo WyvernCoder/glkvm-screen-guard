@@ -881,27 +881,30 @@ def _set(paths: list[PATH_INFO], modes: list[MODE_INFO], flags: int) -> int:
 
 
 def apply_topology(flag: int) -> int:
-    return int(
-        user32.SetDisplayConfig(
-            0,
-            None,
-            0,
-            None,
-            SDC_APPLY | SDC_ALLOW_CHANGES | SDC_SAVE_TO_DATABASE | flag,
-        )
-    )
+    # SDC_ALLOW_CHANGES and SDC_SAVE_TO_DATABASE are only valid together with
+    # SDC_USE_SUPPLIED_DISPLAY_CONFIG.  Combining either of them with a
+    # topology flag makes SetDisplayConfig fail with ERROR_INVALID_PARAMETER
+    # (87) on current drivers, so a plain SDC_APPLY is the only form that works.
+    return int(user32.SetDisplayConfig(0, None, 0, None, SDC_APPLY | flag))
 
 
 def display_switch(argument: str) -> bool:
     """Call DisplaySwitch.exe directly (not via Start-Process)."""
     system_root = os.environ.get("SystemRoot", r"C:\Windows")
     exe = Path(system_root) / "System32" / "DisplaySwitch.exe"
+    # The agent binds its CCD thread to the input desktop, which is Winlogon's
+    # secure desktop while the workstation is locked.  A plain CreateProcess
+    # would inherit that desktop and the projection switch would do nothing, so
+    # force the child onto the interactive desktop explicitly.
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.lpDesktop = "winsta0\\default"
     try:
         subprocess.run(
             [str(exe), argument],
             check=False,
             timeout=10,
             creationflags=0x08000000,
+            startupinfo=startupinfo,
         )
         return True
     except Exception:

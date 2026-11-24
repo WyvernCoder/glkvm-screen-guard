@@ -690,6 +690,10 @@ class ServiceRuntime:
                 self._disconnect_done = False
                 self.log.info("Detection: %s -> watching (%s)", old, reason)
                 self._request_action("connect")
+            elif self._last_action.get("kind") == "connect" and not self._last_action.get("ok"):
+                # Still watched, but the last switch did not take.  Retry with
+                # the normal backoff instead of waiting for another transition.
+                self._request_action("connect")
             self._state = "watching"
             self._reason = reason
         elif state == "idle":

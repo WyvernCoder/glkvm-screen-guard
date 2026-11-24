@@ -8,7 +8,7 @@
 whether someone is viewing the PC through the KVM and switches display layouts:
 KVM-only while watched, local 4K 165 Hz + HDR after the last viewer leaves.
 
-Current version: **v1.2.2**. English is the default UI language (`en_US`); Chinese
+Current version: **v1.2.3**. English is the default UI language (`en_US`); Chinese
 is selectable. The GUI is a configuration/status client over a named pipe; display
 work is done by a Session-1 SYSTEM agent. No packaged executable is required — users
 run `RunGUI.bat` from the project folder after setup.
@@ -219,6 +219,14 @@ Password is stored only as DPAPI ciphertext. Never log passwords, tokens, or raw
   `hdr_api: "v2"` is skipped on modern Windows until recaptured.
 - **Real switch**: Windows external topology first, then `DisplaySwitch.exe /external`
   as fallback; verify for 10 seconds and roll back on failure.
+- **Topology flags**: `SetDisplayConfig` with a topology flag (`SDC_TOPOLOGY_EXTERNAL`
+  etc.) must be called as `SDC_APPLY | flag` only. Adding `SDC_ALLOW_CHANGES` or
+  `SDC_SAVE_TO_DATABASE` returns 87 (`ERROR_INVALID_PARAMETER`) on current drivers;
+  both flags are only valid with `SDC_USE_SUPPLIED_DISPLAY_CONFIG` (the snapshot path).
+- **Fallback desktop**: the agent's CCD thread is bound to the input desktop, which is
+  Winlogon's secure desktop while locked. `DisplaySwitch.exe` must be started with
+  `STARTUPINFO.lpDesktop = "winsta0\\default"`, otherwise the child inherits the
+  secure desktop and the switch silently does nothing.
 - **Measured**: service/agent KVM-only switch ~1085 ms, local restore ~859 ms,
   service stop ~0.5 s.
 

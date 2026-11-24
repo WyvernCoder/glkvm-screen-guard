@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.2.3 — 2026-11-24
+
+### Fixed
+
+- Switching to the KVM layout no longer depends on the `DisplaySwitch.exe` fallback.
+  `SetDisplayConfig` was called with `SDC_ALLOW_CHANGES` and `SDC_SAVE_TO_DATABASE`
+  together with a topology flag; both flags are only valid with
+  `SDC_USE_SUPPLIED_DISPLAY_CONFIG`, so the call always failed with
+  `ERROR_INVALID_PARAMETER` (87) and only the fallback did the work.
+- The `DisplaySwitch.exe` fallback now starts on `winsta0\default`. The agent binds
+  its CCD thread to the input desktop, which is Winlogon's secure desktop while the
+  workstation is locked, so an inherited desktop made the fallback a no-op exactly
+  when the PC is locked and KVM viewing matters most.
+- While a viewer is still watching, a failed switch is retried after the existing
+  60 s backoff instead of waiting for another idle→watching transition.
+
+### Upgrade
+
+- Restart the service (or stop/start it from Settings) so the Session-1 agent reloads
+  the display code. A viewer that is already connected does not need to reconnect.
+
 ## v1.2.2 — 2026-11-23
 
 ### Added

@@ -1,4 +1,4 @@
-# 安装与使用（GLKVM Screen Guard v1.2.2）
+# 安装与使用（GLKVM Screen Guard v1.2.3）
 
 面向 **Windows 11 + GL.iNet GLKVM RM10** 的屏幕守卫。用户不需要安装包：按下面步骤准备好 Python 环境、快捷方式和 Windows 服务后，直接运行 `RunGUI.bat`（或桌面快捷方式）即可。
 
