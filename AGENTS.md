@@ -8,7 +8,7 @@
 whether someone is viewing the PC through the KVM and switches display layouts:
 KVM-only while watched, local 4K 165 Hz + HDR after the last viewer leaves.
 
-Current version: **v1.2.3**. English is the default UI language (`en_US`); Chinese
+Current version: **v1.2.4**. English is the default UI language (`en_US`); Chinese
 is selectable. The GUI is a configuration/status client over a named pipe; display
 work is done by a Session-1 SYSTEM agent. No packaged executable is required — users
 run `RunGUI.bat` from the project folder after setup.
@@ -189,7 +189,13 @@ Password is stored only as DPAPI ciphertext. Never log passwords, tokens, or raw
   signal. Use `_wake_until` to keep “watching” for 60 seconds.
 - A new session ID is the wake signal; do not depend on the RM10 clock (it may be 1970).
   The log timestamp is used only for the initial seed.
-- Unknown (null streamer and unreadable log) keeps the previous state; never guess.
+- Unknown (null streamer and unreadable log) keeps the previous state for at most
+  60 s, then the local layout is restored: a viewer cannot be watching what the RM10
+  is not sending, and holding "watching" forever leaves the physical monitor dark.
+- A `/api/log` response can be large enough that the RM10 closes the connection
+  early. Keep the partial body (`IncompleteRead.partial`) instead of failing the poll.
+- When no viewer is watching at startup (for example after booting into the persisted
+  KVM layout), the service restores the local layout on its own.
 - Do not poll `/api/streamer/snapshot`; it leaks file descriptors when there is no signal.
 - `/system/clients` is local-device only (HTTP 403).
 - Two-step authentication is not supported.

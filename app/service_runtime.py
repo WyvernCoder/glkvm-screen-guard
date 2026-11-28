@@ -50,6 +50,11 @@ PBT_APMSUSPEND = 0x4
 PBT_APMRESUMEAUTOMATIC = 0x12
 PBT_APMRESUMESUSPEND = 0x7
 
+# How long an unreadable/unreachable RM10 may hold the "watching" state before
+# the local layout is restored.  A viewer cannot see anything the RM10 is not
+# sending, so this only fires when the KVM layout is pointless.
+UNKNOWN_RESTORE_SECONDS = 60
+
 
 @dataclass
 class AgentInfo:
@@ -158,6 +163,7 @@ class ServiceRuntime:
         self._fail_until = 0.0
         self._watching_since = 0.0
         self._idle_misses = 0
+        self._unknown_since = 0.0
         self._disconnect_done = False
         self._action_busy = False
         self._action_thread: threading.Thread | None = None
@@ -687,6 +693,7 @@ class ServiceRuntime:
             if old != "watching":
                 self._watching_since = time.time()
                 self._idle_misses = 0
+                self._unknown_since = 0.0
                 self._disconnect_done = False
                 self.log.info("Detection: %s -> watching (%s)", old, reason)
                 self._request_action("connect")
@@ -696,6 +703,7 @@ class ServiceRuntime:
                 self._request_action("connect")
             self._state = "watching"
             self._reason = reason
+            self._unknown_since = 0.0
         elif state == "idle":
             if old == "watching" and not self._disconnect_done:
                 self._idle_misses += 1
@@ -706,10 +714,33 @@ class ServiceRuntime:
             elif old != "watching":
                 self._state = "idle"
                 self._reason = reason
+                # Nothing was watching when this run started (for example the PC
+                # booted into the persisted KVM layout).  Treat the idle state as
+                # confirmed so _maybe_disconnect restores the local layout
+                # instead of waiting for a viewer that may never come.
+                self._idle_misses = max(self._idle_misses, 2)
+            self._unknown_since = 0.0
         else:
             self._reason = reason
             if old not in ("watching", "idle"):
                 self._state = "unknown"
+                self._unknown_since = 0.0
+            elif old == "watching":
+                # The RM10 stopped reporting a streamer, or it cannot be reached.
+                # Nobody can be watching what it is not sending, so never keep the
+                # physical monitor dark because of a stale "watching" state.
+                if not self._unknown_since:
+                    self._unknown_since = time.time()
+                elif time.time() - self._unknown_since >= UNKNOWN_RESTORE_SECONDS:
+                    self.log.warning(
+                        "Detection unknown for %ds (%s); restoring the local layout",
+                        int(time.time() - self._unknown_since),
+                        reason,
+                    )
+                    self._state = "idle"
+                    self._reason = "unknown_timeout"
+                    self._unknown_since = 0.0
+                    self._idle_misses = max(self._idle_misses, 2)
         self._broadcast_state()
 
     def _maybe_disconnect(self) -> None:

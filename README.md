@@ -4,7 +4,7 @@ A Windows 11 desktop tool for **GL.iNet GLKVM RM10**. It watches whether someone
 viewing the machine through GLKVM and switches the display layout automatically,
 then restores the local 4K 165 Hz + HDR layout when the last viewer leaves.
 
-Current version: **v1.2.3**. Polling and the switch state machine run in a LocalSystem
+Current version: **v1.2.4**. Polling and the switch state machine run in a LocalSystem
 Windows service; display changes are executed by a Session-1 SYSTEM display agent.
 The GUI is a configuration/status client over a named pipe, so it does not need to
 stay open. **English is the default UI language**; Chinese is available in Settings.

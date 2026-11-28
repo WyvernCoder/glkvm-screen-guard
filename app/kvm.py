@@ -191,7 +191,12 @@ class KvmClient:
                         headers["Content-Type"] = "application/x-www-form-urlencoded"
                     conn.request(method, target, body=body, headers=headers)
                     resp = conn.getresponse()
-                    data = resp.read()
+                    try:
+                        data = resp.read()
+                    except http.client.IncompleteRead as exc:
+                        # The RM10 sometimes closes a large /api/log response
+                        # early; keep what arrived instead of losing the poll.
+                        data = exc.partial
                     status = resp.status
                     cookie = resp.getheader("Set-Cookie") or ""
                 except (OSError, ssl.SSLError, http.client.HTTPException) as exc:

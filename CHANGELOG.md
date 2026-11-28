@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.2.4 — 2026-11-28
+
+### Fixed
+
+- The physical monitor can no longer stay dark in the KVM layout. If the RM10 stops
+  reporting a streamer (viewer closed, or the endpoint stops answering) or cannot be
+  reached, the "watching" state now expires after 60 s and the local layout is
+  restored. Previously the state machine kept "watching" indefinitely and nothing
+  brought the local display back.
+- When the PC boots into the persisted KVM layout with nobody watching, the service
+  restores the local layout instead of waiting for a viewer transition that may never
+  come.
+- Large `/api/log` responses that the RM10 closes early no longer fail the whole poll:
+  the partial body is kept, so detection reports a real idle state instead of
+  "unknown".
+
+### Upgrade
+
+- Restart the service (or use **Stop service** / **Start service** in Settings) so the
+  service and the Session-1 agent both run the new code.
+
 ## v1.2.3 — 2026-11-24
 
 ### Fixed
